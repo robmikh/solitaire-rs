@@ -1,7 +1,7 @@
 use std::fmt::Display;
 
 #[repr(i32)]
-#[derive(Copy, Clone, PartialEq, PartialOrd)]
+#[derive(Copy, Clone, PartialEq, PartialOrd, Hash)]
 pub enum Face {
     Ace = 1,
     Two = 2,
@@ -20,7 +20,7 @@ pub enum Face {
 
 
 #[repr(i32)]
-#[derive(Copy, Clone, PartialEq, PartialOrd)]
+#[derive(Copy, Clone, PartialEq, PartialOrd, Hash)]
 pub enum Suit {
     Diamond = 0,
     Spade = 1,
@@ -28,6 +28,7 @@ pub enum Suit {
     Club = 3
 }
 
+#[derive(Hash)]
 pub struct Card {
     pub face: Face,
     pub suit: Suit,
@@ -69,4 +70,8 @@ impl PartialEq for Card {
     fn eq(&self, other: &Self) -> bool {
         self.face == other.face && self.suit == other.suit
     }
+}
+
+impl Eq for Card {
+
 }

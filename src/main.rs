@@ -1,6 +1,7 @@
 mod interop;
-mod window_target;
 mod solitaire;
+mod util;
+mod window_target;
 
 use interop::create_dispatcher_queue_controller_for_current_thread;
 use solitaire::Solitaire;
@@ -11,10 +12,16 @@ use winit::{
     window::WindowBuilder,
 };
 
-use bindings::Windows::{Foundation::Numerics::Vector2, UI::Composition::Compositor};
+use bindings::Windows::{
+    Foundation::Numerics::Vector2, 
+    UI::Composition::Compositor, 
+    Win32::System::WinRT::{
+        RoInitialize, RO_INIT_SINGLETHREADED,
+    },
+};
 
 fn main() -> windows::Result<()> {
-    windows::initialize_sta()?;
+    unsafe { RoInitialize(RO_INIT_SINGLETHREADED)? };
     let _controller = create_dispatcher_queue_controller_for_current_thread()?;
     
     let event_loop = EventLoop::new();
