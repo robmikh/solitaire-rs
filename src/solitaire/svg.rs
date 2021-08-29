@@ -354,7 +354,7 @@ fn process_svg_element(presentation_stack: &mut VecDeque<Presentation>, parent_s
             }
             // Currently these are handled elsewhere.
             "stop" => {}
-            "linearGardient" => {}
+            "linearGradient" => {}
             "radialGradient" => {}
             _ => {
                 println!("Unknown tag: {}", &tag);
