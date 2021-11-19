@@ -5,9 +5,41 @@ authors = ["robmikh <rob.mikh@outlook.com>"]
 edition = "2018"
 
 [dependencies]
-#windows = "0.12.0"
-windows = { git = "https://github.com/microsoft/windows-rs.git" }
-bindings = { path = "bindings" }
 winit = "0.24.0"
 raw-window-handle = "0.3.3"
 rand = "0.8.3"
+
+[dependencies.windows]
+version = "0.28.0"
+features = [
+    "alloc",
+    "build",
+    "Foundation",
+    "Foundation_Collections",
+    "Foundation_Metadata",
+    "Foundation_Numerics",
+    "UI",
+    "UI_Composition",
+    "UI_Composition_Desktop",
+    "Graphics",
+    "Graphics_DirectX",
+    "Graphics_DirectX_Direct3D11",
+    "Storage",
+    "Storage_Streams",
+    "System",
+    "Win32_Foundation",
+    "Win32_Graphics_Direct2D",
+    "Win32_Graphics_Direct2D_Common",
+    "Win32_Graphics_Direct3D",
+    "Win32_Graphics_Direct3D11",
+    "Win32_Graphics_Dxgi",
+    "Win32_Graphics_Dxgi_Common",
+    "Win32_Graphics_Gdi",
+    "Win32_Storage_FileSystem",
+    "Win32_System_Com",
+    "Win32_System_WinRT",
+    "Win32_System_WinRT_Composition",
+    "Win32_System_WinRT_Direct3D11",
+    "Win32_System_WinRT_Graphics_Direct2D",
+    "Win32_UI_WindowsAndMessaging",
+]

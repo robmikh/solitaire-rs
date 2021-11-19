@@ -1,16 +1,43 @@
-use std::{collections::VecDeque, convert::TryInto, rc::Rc};
-use windows::{Abi, Interface};
+use std::{collections::VecDeque, rc::Rc};
+use windows::core::Interface;
+use windows::Win32::Foundation::S_OK;
+use windows::Win32::Graphics::Direct2D::D2D1_SVG_ATTRIBUTE_POD_TYPE_MATRIX;
 
-use bindings::Windows::{Foundation::Numerics::{Matrix3x2, Vector2, Vector3}, Graphics::IGeometrySource2D, UI::{Color, Colors, Composition::{CompositionBrush, CompositionContainerShape, CompositionGeometry, CompositionPath, CompositionViewBox, Compositor}}, Win32::{Foundation::PWSTR, Graphics::Direct2D::{D2D1_COLOR_F, D2D1_FILL_MODE_ALTERNATE, D2D1_SVG_ATTRIBUTE_POD_TYPE_COLOR, D2D1_SVG_ATTRIBUTE_POD_TYPE_FLOAT, D2D1_SVG_ATTRIBUTE_POD_TYPE_VIEWBOX, D2D1_SVG_ATTRIBUTE_STRING_TYPE_ID, D2D1_SVG_PAINT_TYPE_COLOR, D2D1_SVG_PAINT_TYPE_URI, D2D1_SVG_VIEWBOX, D2D_MATRIX_3X2_F, ID2D1SvgAttribute, ID2D1SvgDocument, ID2D1SvgElement, ID2D1SvgPaint, ID2D1SvgPathData}}};
+use windows::{
+    Foundation::Numerics::{Matrix3x2, Vector2},
+    Graphics::IGeometrySource2D,
+    Win32::{
+        Foundation::PWSTR,
+        Graphics::Direct2D::{
+            Common::{D2D1_COLOR_F, D2D1_FILL_MODE_ALTERNATE, D2D_MATRIX_3X2_F},
+            ID2D1SvgAttribute, ID2D1SvgDocument, ID2D1SvgElement, ID2D1SvgPaint, ID2D1SvgPathData,
+            D2D1_SVG_ATTRIBUTE_POD_TYPE_COLOR, D2D1_SVG_ATTRIBUTE_POD_TYPE_FLOAT,
+            D2D1_SVG_ATTRIBUTE_POD_TYPE_VIEWBOX, D2D1_SVG_ATTRIBUTE_STRING_TYPE_ID,
+            D2D1_SVG_PAINT_TYPE_COLOR, D2D1_SVG_PAINT_TYPE_URI, D2D1_SVG_VIEWBOX,
+        },
+    },
+    UI::{
+        Color, Colors,
+        Composition::{
+            CompositionBrush, CompositionContainerShape, CompositionGeometry, CompositionPath,
+            CompositionViewBox, Compositor,
+        },
+    },
+};
 
-use crate::util::{geometry_source::GeometrySource, try_cast::TryCast, wide_string::ToWide};
+use crate::util::{
+    error::Result, geometry_source::GeometrySource, try_cast::TryCast, wide_string::ToWide,
+};
 
 pub struct SvgCompositionShapes {
     pub view_box: Option<CompositionViewBox>,
     pub root_shape: CompositionContainerShape,
 }
 
-pub fn convert_svg_document_to_composition_shapes(compositor: &Compositor, document: &ID2D1SvgDocument) -> windows::Result<SvgCompositionShapes> {
+pub fn convert_svg_document_to_composition_shapes(
+    compositor: &Compositor,
+    document: &ID2D1SvgDocument,
+) -> Result<SvgCompositionShapes> {
     let root_visual = compositor.CreateShapeVisual()?;
 
     // Assumption: There is only one "svg" element and it is at the root.
@@ -23,7 +50,11 @@ pub fn convert_svg_document_to_composition_shapes(compositor: &Compositor, docum
     let tag = get_tag(&root_element)?;
     assert_eq!(&tag, "svg");
 
-    let mut view_box = if unsafe { root_element.IsAttributeSpecified("viewBox".to_wide().as_pwstr(), std::ptr::null_mut()) }.as_bool() {
+    let view_box = if unsafe {
+        root_element.IsAttributeSpecified("viewBox".to_wide().as_pwstr(), std::ptr::null_mut())
+    }
+    .as_bool()
+    {
         let rect = get_rectangle_attribute(&root_element, "viewBox")?;
         let view_box = compositor.CreateViewBox()?;
         view_box.SetSize(Vector2::new(rect.width as f32, rect.height as f32))?;
@@ -37,7 +68,9 @@ pub fn convert_svg_document_to_composition_shapes(compositor: &Compositor, docum
     let mut presentation_stack = VecDeque::new();
     presentation_stack.push_back(Presentation {
         fill: Some(Rc::new(Box::new(ColorBrushInfo::new(Colors::Black()?)))),
-        stroke: Some(Rc::new(Box::new(ColorBrushInfo::new(Colors::Transparent()?)))),
+        stroke: Some(Rc::new(Box::new(ColorBrushInfo::new(
+            Colors::Transparent()?
+        )))),
         stroke_width: 1.0,
     });
 
@@ -45,12 +78,7 @@ pub fn convert_svg_document_to_composition_shapes(compositor: &Compositor, docum
     unsafe { root_element.GetFirstChild(&mut child) };
     while child.is_some() {
         process_svg_element(&mut presentation_stack, &container, child.as_ref().unwrap())?;
-        let next_child = unsafe { root_element.GetNextChild(child.as_ref().unwrap())? };
-        if next_child.abi().is_null() {
-            child = None;
-        } else {
-            child = Some(next_child);
-        }
+        child = unsafe { root_element.get_next_child_workaround(child.as_ref().unwrap())? };
     }
 
     Ok(SvgCompositionShapes {
@@ -60,7 +88,7 @@ pub fn convert_svg_document_to_composition_shapes(compositor: &Compositor, docum
 }
 
 trait IBrushInfo {
-    fn create_brush(&self, compositor: &Compositor) -> windows::Result<CompositionBrush>;
+    fn create_brush(&self, compositor: &Compositor) -> Result<CompositionBrush>;
 }
 
 struct ColorBrushInfo {
@@ -96,24 +124,27 @@ impl LinearGradientBrushInfo {
 }
 
 impl IBrushInfo for ColorBrushInfo {
-    fn create_brush(&self, compositor: &Compositor) -> windows::Result<CompositionBrush> {
-        compositor.CreateColorBrushWithColor(self.color)?.cast()
+    fn create_brush(&self, compositor: &Compositor) -> Result<CompositionBrush> {
+        let brush = compositor.CreateColorBrushWithColor(self.color)?.cast()?;
+        Ok(brush)
     }
 }
 
 impl IBrushInfo for LinearGradientBrushInfo {
-    fn create_brush(&self, compositor: &Compositor) -> windows::Result<CompositionBrush> {
+    fn create_brush(&self, compositor: &Compositor) -> Result<CompositionBrush> {
         let brush = compositor.CreateLinearGradientBrush()?;
         let color_stops = brush.ColorStops()?;
         for stop in &self.stops {
-            let composition_stop = compositor.CreateColorGradientStopWithOffsetAndColor(stop.offset, stop.color)?;
+            let composition_stop =
+                compositor.CreateColorGradientStopWithOffsetAndColor(stop.offset, stop.color)?;
             color_stops.Append(composition_stop)?;
         }
-        brush.cast()
+        let brush = brush.cast()?;
+        Ok(brush)
     }
 }
 
-fn get_tag(element: &ID2D1SvgElement) -> windows::Result<String> {
+fn get_tag(element: &ID2D1SvgElement) -> Result<String> {
     let length = unsafe { element.GetTagNameLength() };
     let mut name = vec![0u16; (length + 1) as usize];
     unsafe { element.GetTagName(PWSTR(name.as_mut_ptr()), name.len() as u32)? };
@@ -122,56 +153,95 @@ fn get_tag(element: &ID2D1SvgElement) -> windows::Result<String> {
     Ok(name)
 }
 
-fn get_rectangle_attribute(element: &ID2D1SvgElement, attribute_name: &str) -> windows::Result<D2D1_SVG_VIEWBOX> {
+fn get_rectangle_attribute(
+    element: &ID2D1SvgElement,
+    attribute_name: &str,
+) -> Result<D2D1_SVG_VIEWBOX> {
     let mut rect = D2D1_SVG_VIEWBOX::default();
     unsafe {
-        element.GetAttributeValue2(attribute_name.to_wide().as_pwstr(), D2D1_SVG_ATTRIBUTE_POD_TYPE_VIEWBOX, &mut rect as *mut _ as *mut _, std::mem::size_of::<D2D1_SVG_VIEWBOX>() as u32)?;
+        element.GetAttributeValue2(
+            attribute_name.to_wide().as_pwstr(),
+            D2D1_SVG_ATTRIBUTE_POD_TYPE_VIEWBOX,
+            &mut rect as *mut _ as *mut _,
+            std::mem::size_of::<D2D1_SVG_VIEWBOX>() as u32,
+        )?;
     }
     Ok(rect)
 }
 
-fn get_id_attribute(element: &ID2D1SvgElement, attribute_name: &str) -> windows::Result<String> {
+fn get_id_attribute(element: &ID2D1SvgElement, attribute_name: &str) -> Result<String> {
     let attribute_name = attribute_name.to_wide();
-    let attribute_length = unsafe { element.GetAttributeValueLength(attribute_name.as_pwstr(), D2D1_SVG_ATTRIBUTE_STRING_TYPE_ID)? };
+    let attribute_length = unsafe {
+        element
+            .GetAttributeValueLength(attribute_name.as_pwstr(), D2D1_SVG_ATTRIBUTE_STRING_TYPE_ID)?
+    };
     let mut data = vec![0u16; (attribute_length + 1) as usize];
-    unsafe { element.GetAttributeValue(attribute_name.as_pwstr(), D2D1_SVG_ATTRIBUTE_STRING_TYPE_ID, PWSTR(data.as_mut_ptr()), data.len() as u32)? };
+    unsafe {
+        element.GetAttributeValue3(
+            attribute_name.as_pwstr(),
+            D2D1_SVG_ATTRIBUTE_STRING_TYPE_ID,
+            PWSTR(data.as_mut_ptr()),
+            data.len() as u32,
+        )?
+    };
     data.resize(attribute_length as usize, 0);
     Ok(String::from_utf16_lossy(&data))
 }
 
-fn get_specified_attributes(element: &ID2D1SvgElement) -> windows::Result<Vec<String>> {
+fn get_specified_attributes(element: &ID2D1SvgElement) -> Result<Vec<String>> {
     let mut names = Vec::new();
     let count = unsafe { element.GetSpecifiedAttributeCount() };
     for i in 0..count {
         let mut length = 0;
-        unsafe { element.GetSpecifiedAttributeNameLength(i, &mut length, &mut false.into())?; }
+        unsafe {
+            element.GetSpecifiedAttributeNameLength(i, &mut length, &mut false.into())?;
+        }
         let mut name = vec![0u16; (length + 1) as usize];
-        unsafe { element.GetSpecifiedAttributeName(i, PWSTR(name.as_mut_ptr()), name.len() as u32, &mut false.into())?};
+        unsafe {
+            element.GetSpecifiedAttributeName(
+                i,
+                PWSTR(name.as_mut_ptr()),
+                name.len() as u32,
+                &mut false.into(),
+            )?
+        };
         name.resize(length as usize, 0);
         names.push(String::from_utf16_lossy(&name));
     }
     Ok(names)
 }
 
-fn get_float_attribute(element: &ID2D1SvgElement, attribute_name: &str) -> windows::Result<f32>{
+fn get_float_attribute(element: &ID2D1SvgElement, attribute_name: &str) -> Result<f32> {
     let mut value: f32 = 0.0;
     unsafe {
-        element.GetAttributeValue2(attribute_name.to_wide().as_pwstr(), D2D1_SVG_ATTRIBUTE_POD_TYPE_FLOAT, &mut value as *mut _ as *mut _, std::mem::size_of::<f32>() as u32)?;
+        element.GetAttributeValue2(
+            attribute_name.to_wide().as_pwstr(),
+            D2D1_SVG_ATTRIBUTE_POD_TYPE_FLOAT,
+            &mut value as *mut _ as *mut _,
+            std::mem::size_of::<f32>() as u32,
+        )?;
     };
     Ok(value)
 }
 
-fn get_color_attribute(element: &ID2D1SvgElement, attribute_name: &str) -> windows::Result<Color> {
+fn get_color_attribute(element: &ID2D1SvgElement, attribute_name: &str) -> Result<Color> {
     let mut value = D2D1_COLOR_F::default();
-    unsafe { element.GetAttributeValue2(attribute_name.to_wide().as_pwstr(), D2D1_SVG_ATTRIBUTE_POD_TYPE_COLOR, &mut value as *mut _ as *mut _, std::mem::size_of::<D2D1_COLOR_F>() as u32)? };
+    unsafe {
+        element.GetAttributeValue2(
+            attribute_name.to_wide().as_pwstr(),
+            D2D1_SVG_ATTRIBUTE_POD_TYPE_COLOR,
+            &mut value as *mut _ as *mut _,
+            std::mem::size_of::<D2D1_COLOR_F>() as u32,
+        )?
+    };
     Ok(d2d_color_to_winrt_color(&value))
 }
 
-fn create_linear_gradient_brush_info(element: &ID2D1SvgElement) -> windows::Result<Rc<Box<dyn IBrushInfo>>> {
+fn create_linear_gradient_brush_info(element: &ID2D1SvgElement) -> Result<Rc<Box<dyn IBrushInfo>>> {
     let mut stops = Vec::new();
     if unsafe { element.HasChildren().as_bool() } {
         let mut child = None;
-        unsafe { element.GetFirstChild(&mut child)};
+        unsafe { element.GetFirstChild(&mut child) };
         while child.is_some() {
             let current = child.as_ref().unwrap();
             if unsafe { current.IsTextContent().as_bool() } {
@@ -183,9 +253,12 @@ fn create_linear_gradient_brush_info(element: &ID2D1SvgElement) -> windows::Resu
         }
     }
     Ok(Rc::new(Box::new(LinearGradientBrushInfo::new(stops))))
-}   
+}
 
-fn create_brush_info_from_id(document: &ID2D1SvgDocument, mut id: Vec<u16>) -> windows::Result<Option<Rc<Box<dyn IBrushInfo>>>> {
+fn create_brush_info_from_id(
+    document: &ID2D1SvgDocument,
+    mut id: Vec<u16>,
+) -> Result<Option<Rc<Box<dyn IBrushInfo>>>> {
     let reference = unsafe { document.FindElementById(PWSTR(id.as_mut_ptr()))? };
     let tag = get_tag(&reference)?;
     if tag == "linearGradient" {
@@ -195,23 +268,35 @@ fn create_brush_info_from_id(document: &ID2D1SvgDocument, mut id: Vec<u16>) -> w
     }
 }
 
-fn get_brush_info(element: &ID2D1SvgElement, attribute_name: &str) -> windows::Result<Option<Rc<Box<dyn IBrushInfo>>>> {
-    let attribute: ID2D1SvgAttribute = unsafe { element.GetAttributeValue3(attribute_name.to_wide().as_pwstr())? };
+fn get_brush_info(
+    element: &ID2D1SvgElement,
+    attribute_name: &str,
+) -> Result<Option<Rc<Box<dyn IBrushInfo>>>> {
+    let attribute: ID2D1SvgAttribute = unsafe {
+        let mut attribute = None;
+        element.GetAttributeValue(
+            attribute_name.to_wide().as_pwstr(),
+            &mut attribute as *mut _,
+        )?;
+        attribute.unwrap()
+    };
     if let Some(paint_attribute) = attribute.try_cast::<ID2D1SvgPaint>()? {
         let paint_type = unsafe { paint_attribute.GetPaintType() };
         match paint_type {
             D2D1_SVG_PAINT_TYPE_COLOR => {
                 let mut color = D2D1_COLOR_F::default();
                 unsafe { paint_attribute.GetColor(&mut color) };
-                return Ok(Some(Rc::new(Box::new(ColorBrushInfo::new(d2d_color_to_winrt_color(&color))))));
+                return Ok(Some(Rc::new(Box::new(ColorBrushInfo::new(
+                    d2d_color_to_winrt_color(&color),
+                )))));
             }
             D2D1_SVG_PAINT_TYPE_URI => {
                 let length = unsafe { paint_attribute.GetIdLength() };
                 let mut id = vec![0u16; (length + 1) as usize];
-                unsafe {paint_attribute.GetId(PWSTR(id.as_mut_ptr()), length)? };
+                unsafe { paint_attribute.GetId(PWSTR(id.as_mut_ptr()), length)? };
                 id.resize(length as usize, 0);
                 let mut document = None;
-                unsafe { element.GetDocument(&mut document)};
+                unsafe { element.GetDocument(&mut document) };
                 let document = document.unwrap();
                 return create_brush_info_from_id(&document, id);
             }
@@ -222,16 +307,31 @@ fn get_brush_info(element: &ID2D1SvgElement, attribute_name: &str) -> windows::R
 }
 
 fn d2d_color_to_winrt_color(color: &D2D1_COLOR_F) -> Color {
-    Color { A: (color.a * 255.0) as u8, R: (color.r * 255.0) as u8, G: (color.g * 255.0) as u8, B: (color.b * 255.0) as u8 }
+    Color {
+        A: (color.a * 255.0) as u8,
+        R: (color.r * 255.0) as u8,
+        G: (color.g * 255.0) as u8,
+        B: (color.b * 255.0) as u8,
+    }
 }
 
-fn get_transform_attribute(element: &ID2D1SvgElement, attribute_name: &str) -> windows::Result<Matrix3x2> {
+fn get_transform_attribute(element: &ID2D1SvgElement, attribute_name: &str) -> Result<Matrix3x2> {
     let mut value = Matrix3x2::default();
-    unsafe { element.GetAttributeValue2(attribute_name.to_wide().as_pwstr(), D2D1_SVG_ATTRIBUTE_POD_TYPE_COLOR, &mut value as *mut _ as *mut _, std::mem::size_of::<D2D_MATRIX_3X2_F>() as u32)? };
+    unsafe {
+        element.GetAttributeValue2(
+            attribute_name.to_wide().as_pwstr(),
+            D2D1_SVG_ATTRIBUTE_POD_TYPE_MATRIX,
+            &mut value as *mut _ as *mut _,
+            std::mem::size_of::<D2D_MATRIX_3X2_F>() as u32,
+        )?
+    };
     Ok(value)
 }
 
-fn create_brush_from_brush_info(compositor: &Compositor, brush_info: &Option<Rc<Box<dyn IBrushInfo>>>) -> windows::Result<Option<CompositionBrush>> {
+fn create_brush_from_brush_info(
+    compositor: &Compositor,
+    brush_info: &Option<Rc<Box<dyn IBrushInfo>>>,
+) -> Result<Option<CompositionBrush>> {
     if let Some(info) = brush_info {
         Ok(Some(info.create_brush(compositor)?))
     } else {
@@ -239,8 +339,12 @@ fn create_brush_from_brush_info(compositor: &Compositor, brush_info: &Option<Rc<
     }
 }
 
-fn process_svg_element(presentation_stack: &mut VecDeque<Presentation>, parent_shape: &CompositionContainerShape, element: &ID2D1SvgElement) -> windows::Result<()> {
-    let mut current = element;
+fn process_svg_element(
+    presentation_stack: &mut VecDeque<Presentation>,
+    parent_shape: &CompositionContainerShape,
+    element: &ID2D1SvgElement,
+) -> Result<()> {
+    let current = element;
     if !unsafe { current.IsTextContent().as_bool() } {
         let compositor = parent_shape.Compositor()?;
         let current_shape = compositor.CreateContainerShape()?;
@@ -250,8 +354,15 @@ fn process_svg_element(presentation_stack: &mut VecDeque<Presentation>, parent_s
         let mut presentation = current_presentation.clone();
 
         // Record the id for debugging
-        if unsafe { current.IsAttributeSpecified("id".to_wide().as_pwstr(), std::ptr::null_mut()).as_bool() } {
+        if unsafe {
+            current
+                .IsAttributeSpecified("id".to_wide().as_pwstr(), std::ptr::null_mut())
+                .as_bool()
+        } {
             let id = get_id_attribute(&element, "id")?;
+            //if id == "path5-8" {
+            //    println!("woop");
+            //}
             current_shape.SetComment(id)?;
         }
 
@@ -300,7 +411,8 @@ fn process_svg_element(presentation_stack: &mut VecDeque<Presentation>, parent_s
                 let mut document = None;
                 unsafe { current.GetDocument(&mut document) };
                 let document = document.unwrap();
-                let reference = unsafe { document.FindElementById(href.as_str().to_wide().as_pwstr())? };
+                let reference =
+                    unsafe { document.FindElementById(href.as_str().to_wide().as_pwstr())? };
                 process_svg_element(presentation_stack, &current_shape, &reference)?;
             }
             "circle" => {
@@ -313,8 +425,14 @@ fn process_svg_element(presentation_stack: &mut VecDeque<Presentation>, parent_s
                 geometry.SetRadius(Vector2::new(radius, radius))?;
                 let sprite_shape = compositor.CreateSpriteShape()?;
 
-                sprite_shape.SetFillBrush(create_brush_from_brush_info(&compositor, &presentation.fill)?)?;
-                sprite_shape.SetStrokeBrush(create_brush_from_brush_info(&compositor, &presentation.stroke)?)?;
+                sprite_shape.SetFillBrush(create_brush_from_brush_info(
+                    &compositor,
+                    &presentation.fill,
+                )?)?;
+                sprite_shape.SetStrokeBrush(create_brush_from_brush_info(
+                    &compositor,
+                    &presentation.stroke,
+                )?)?;
                 sprite_shape.SetStrokeThickness(presentation.stroke_width)?;
 
                 current_shape.Shapes()?.Append(sprite_shape)?;
@@ -330,24 +448,45 @@ fn process_svg_element(presentation_stack: &mut VecDeque<Presentation>, parent_s
                 geometry.SetSize(Vector2::new(width, height))?;
                 let sprite_shape = compositor.CreateSpriteShape()?;
 
-                sprite_shape.SetFillBrush(create_brush_from_brush_info(&compositor, &presentation.fill)?)?;
-                sprite_shape.SetStrokeBrush(create_brush_from_brush_info(&compositor, &presentation.stroke)?)?;
+                sprite_shape.SetFillBrush(create_brush_from_brush_info(
+                    &compositor,
+                    &presentation.fill,
+                )?)?;
+                sprite_shape.SetStrokeBrush(create_brush_from_brush_info(
+                    &compositor,
+                    &presentation.stroke,
+                )?)?;
                 sprite_shape.SetStrokeThickness(presentation.stroke_width)?;
 
                 current_shape.Shapes()?.Append(sprite_shape)?;
             }
             "g" => {}
             "path" => {
-                let attribute: ID2D1SvgAttribute = unsafe { element.GetAttributeValue3("d".to_wide().as_pwstr())? };
+                let attribute: ID2D1SvgAttribute = unsafe {
+                    let mut attribute = None;
+                    element
+                        .GetAttributeValue("d".to_wide().as_pwstr(), &mut attribute as *mut _)?;
+                    attribute.unwrap()
+                };
                 let path_attribute: ID2D1SvgPathData = attribute.cast()?;
-                let d2d_geometry = unsafe {path_attribute.CreatePathGeometry(D2D1_FILL_MODE_ALTERNATE)? };
-                let geometry_source: IGeometrySource2D = GeometrySource::new(d2d_geometry.cast()?).into();
+                let d2d_geometry =
+                    unsafe { path_attribute.CreatePathGeometry(D2D1_FILL_MODE_ALTERNATE)? };
+                let geometry_source: IGeometrySource2D =
+                    GeometrySource::new(d2d_geometry.cast()?).into();
                 let composition_path = CompositionPath::Create(geometry_source)?;
-                let path_geometry: CompositionGeometry = compositor.CreatePathGeometryWithPath(composition_path)?.cast()?;
+                let path_geometry: CompositionGeometry = compositor
+                    .CreatePathGeometryWithPath(composition_path)?
+                    .cast()?;
                 let sprite_shape = compositor.CreateSpriteShapeWithGeometry(path_geometry)?;
 
-                sprite_shape.SetFillBrush(create_brush_from_brush_info(&compositor, &presentation.fill)?)?;
-                sprite_shape.SetStrokeBrush(create_brush_from_brush_info(&compositor, &presentation.stroke)?)?;
+                sprite_shape.SetFillBrush(create_brush_from_brush_info(
+                    &compositor,
+                    &presentation.fill,
+                )?)?;
+                sprite_shape.SetStrokeBrush(create_brush_from_brush_info(
+                    &compositor,
+                    &presentation.stroke,
+                )?)?;
                 sprite_shape.SetStrokeThickness(presentation.stroke_width)?;
 
                 current_shape.Shapes()?.Append(sprite_shape)?;
@@ -369,16 +508,38 @@ fn process_svg_element(presentation_stack: &mut VecDeque<Presentation>, parent_s
             unsafe { current.GetFirstChild(&mut child) };
             while child.is_some() {
                 process_svg_element(presentation_stack, &current_shape, child.as_ref().unwrap())?;
-                let next_child = unsafe { current.GetNextChild(child.as_ref().unwrap())? };
-                if next_child.abi().is_null() {
-                    child = None;
-                } else {
-                    child = Some(next_child);
-                }
+                child = unsafe { current.get_next_child_workaround(child.as_ref().unwrap())? };
             }
         }
 
         presentation_stack.pop_back();
     }
     Ok(())
+}
+
+// Workaround for metadata bug
+trait GetNextChildWorkaround {
+    unsafe fn get_next_child_workaround(
+        &self,
+        reference_child: &ID2D1SvgElement,
+    ) -> Result<Option<ID2D1SvgElement>>;
+}
+
+impl GetNextChildWorkaround for ID2D1SvgElement {
+    unsafe fn get_next_child_workaround(
+        &self,
+        reference_child: &ID2D1SvgElement,
+    ) -> Result<Option<ID2D1SvgElement>> {
+        let result = self.GetNextChild(reference_child);
+        match result {
+            Ok(element) => Ok(Some(element)),
+            Err(error) => {
+                if error.code() == S_OK {
+                    Ok(None)
+                } else {
+                    Err(error.into())
+                }
+            }
+        }
+    }
 }

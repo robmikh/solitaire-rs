@@ -5,6 +5,7 @@ mod window_target;
 
 use interop::create_dispatcher_queue_controller_for_current_thread;
 use solitaire::Solitaire;
+use util::error::Result;
 use window_target::CompositionDesktopWindowTargetSource;
 use winit::{
     event::{ElementState, Event, MouseButton, WindowEvent},
@@ -12,18 +13,16 @@ use winit::{
     window::WindowBuilder,
 };
 
-use bindings::Windows::{
-    Foundation::Numerics::Vector2, 
-    UI::Composition::Compositor, 
-    Win32::System::WinRT::{
-        RoInitialize, RO_INIT_SINGLETHREADED,
-    },
+use windows::{
+    Foundation::Numerics::Vector2,
+    Win32::System::WinRT::{RoInitialize, RO_INIT_SINGLETHREADED},
+    UI::Composition::Compositor,
 };
 
-fn main() -> windows::Result<()> {
+fn main() -> Result<()> {
     unsafe { RoInitialize(RO_INIT_SINGLETHREADED)? };
     let _controller = create_dispatcher_queue_controller_for_current_thread()?;
-    
+
     let event_loop = EventLoop::new();
     let window = WindowBuilder::new().build(&event_loop).unwrap();
     window.set_title("Solitaire");

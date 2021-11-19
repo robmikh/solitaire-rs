@@ -1,4 +1,11 @@
-use bindings::Windows::{Foundation::Numerics::{Vector2, Vector3}, UI::{Color, Composition::{ContainerVisual, SpriteVisual}}};
+use windows::{
+    core::Result,
+    Foundation::Numerics::{Vector2, Vector3},
+    UI::{
+        Color,
+        Composition::{ContainerVisual, SpriteVisual},
+    },
+};
 
 use super::{game::Game, shape_cache::ShapeCache};
 
@@ -11,10 +18,7 @@ pub struct Solitaire {
 }
 
 impl Solitaire {
-    pub fn new(
-        parent_visual: &ContainerVisual,
-        parent_size: Vector2,
-    ) -> windows::Result<Self> {
+    pub fn new(parent_visual: &ContainerVisual, parent_size: Vector2) -> Result<Self> {
         let compositor = parent_visual.Compositor()?;
         let shape_cache = ShapeCache::new(&compositor)?;
 
@@ -26,22 +30,38 @@ impl Solitaire {
 
         let background = compositor.CreateSpriteVisual()?;
         background.SetAnchorPoint(Vector2::new(0.5, 0.5))?;
-        background.SetRelativeOffsetAdjustment(Vector3::new( 0.5, 0.5, 0.0))?;
+        background.SetRelativeOffsetAdjustment(Vector3::new(0.5, 0.5, 0.0))?;
         let diameter = compute_diameter(&parent_size) * 2.0;
         background.SetSize(Vector2::new(diameter, diameter))?;
         let background_brush = compositor.CreateRadialGradientBrush()?;
         let color_stops = background_brush.ColorStops()?;
-        color_stops.Append(compositor.CreateColorGradientStopWithOffsetAndColor(0.0, Color { A: 255, R: 14, G: 144, B: 58})?)?;
-        color_stops.Append(compositor.CreateColorGradientStopWithOffsetAndColor(1.0, Color { A: 255, R: 7, G: 69, B: 32})?)?;
+        color_stops.Append(compositor.CreateColorGradientStopWithOffsetAndColor(
+            0.0,
+            Color {
+                A: 255,
+                R: 14,
+                G: 144,
+                B: 58,
+            },
+        )?)?;
+        color_stops.Append(compositor.CreateColorGradientStopWithOffsetAndColor(
+            1.0,
+            Color {
+                A: 255,
+                R: 7,
+                G: 69,
+                B: 32,
+            },
+        )?)?;
         background.SetBrush(background_brush)?;
         root_children.InsertAtBottom(&background)?;
 
         let content = compositor.CreateContainerVisual()?;
-        content.SetSize(Vector2::new( 1327.0, 1111.0))?;
-        content.SetAnchorPoint(Vector2::new( 0.5, 0.5 ))?;
-        content.SetRelativeOffsetAdjustment(Vector3::new( 0.5, 0.5, 0.0 ))?;
+        content.SetSize(Vector2::new(1327.0, 1111.0))?;
+        content.SetAnchorPoint(Vector2::new(0.5, 0.5))?;
+        content.SetRelativeOffsetAdjustment(Vector3::new(0.5, 0.5, 0.0))?;
         let scale = compute_scale_factor(&parent_size, &content.Size()?);
-        content.SetScale(Vector3::new( scale, scale, 1.0 ))?;
+        content.SetScale(Vector3::new(scale, scale, 1.0))?;
         root_children.InsertAtTop(&content)?;
 
         let size = content.Size()?;
@@ -52,7 +72,7 @@ impl Solitaire {
             game,
             root,
             background,
-            content
+            content,
         })
     }
 }

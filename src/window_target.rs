@@ -1,15 +1,15 @@
-use bindings::Windows::Win32::Foundation::HWND;
-use bindings::Windows::Win32::System::WinRT::ICompositorDesktopInterop;
-use bindings::Windows::UI::Composition::{Compositor, Desktop::DesktopWindowTarget};
 use raw_window_handle::HasRawWindowHandle;
-use windows::Interface;
+use windows::core::{Interface, Result};
+use windows::Win32::Foundation::HWND;
+use windows::Win32::System::WinRT::Composition::ICompositorDesktopInterop;
+use windows::UI::Composition::{Compositor, Desktop::DesktopWindowTarget};
 
 pub trait CompositionDesktopWindowTargetSource {
     fn create_window_target(
         &self,
         compositor: &Compositor,
         is_topmost: bool,
-    ) -> windows::Result<DesktopWindowTarget>;
+    ) -> Result<DesktopWindowTarget>;
 }
 
 impl<T> CompositionDesktopWindowTargetSource for T
@@ -20,7 +20,7 @@ where
         &self,
         compositor: &Compositor,
         is_topmost: bool,
-    ) -> windows::Result<DesktopWindowTarget> {
+    ) -> Result<DesktopWindowTarget> {
         // Get the window handle
         let window_handle = self.raw_window_handle();
         let window_handle = match window_handle {
@@ -30,8 +30,7 @@ where
 
         let compositor_desktop: ICompositorDesktopInterop = compositor.cast()?;
         unsafe {
-            compositor_desktop
-                .CreateDesktopWindowTarget(HWND(window_handle as isize), is_topmost)
+            compositor_desktop.CreateDesktopWindowTarget(HWND(window_handle as isize), is_topmost)
         }
     }
 }
