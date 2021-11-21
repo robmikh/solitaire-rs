@@ -1,5 +1,8 @@
 use std::collections::HashMap;
 
+use compsvg::{SvgCompositionShapes, convert_svg_document_to_composition_shapes};
+use robmikh_common::universal::d2d::{create_d2d_device, create_d2d_factory};
+use robmikh_common::universal::d3d::create_d3d_device;
 use windows::core::{Interface, Result};
 use windows::{
     Foundation::Numerics::Vector2,
@@ -16,8 +19,6 @@ use windows::{
 };
 
 use crate::util::{
-    d2d::{create_d2d_device, create_d2d_factory},
-    d3d::create_d3d_device,
     streams::ReadOnlyCursorToStreamWrapper,
 };
 
@@ -25,7 +26,6 @@ use super::{
     assets::get_asset_data,
     card::{Card, Face, Suit},
     composition_card::CompositionCard,
-    svg::{convert_svg_document_to_composition_shapes, SvgCompositionShapes},
 };
 
 #[derive(PartialEq, Eq, Hash)]

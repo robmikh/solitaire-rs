@@ -1,9 +1,8 @@
-mod interop;
 mod solitaire;
 mod util;
 mod window_target;
 
-use interop::create_dispatcher_queue_controller_for_current_thread;
+use robmikh_common::desktop::dispatcher_queue::DispatcherQueueControllerExtensions;
 use solitaire::Solitaire;
 use util::error::Result;
 use window_target::CompositionDesktopWindowTargetSource;
@@ -13,15 +12,12 @@ use winit::{
     window::WindowBuilder,
 };
 
-use windows::{
-    Foundation::Numerics::Vector2,
-    Win32::System::WinRT::{RoInitialize, RO_INIT_SINGLETHREADED},
-    UI::Composition::Compositor,
-};
+use windows::{Foundation::Numerics::Vector2, System::DispatcherQueueController, UI::Composition::Compositor, Win32::System::WinRT::{RoInitialize, RO_INIT_SINGLETHREADED}};
 
 fn main() -> Result<()> {
     unsafe { RoInitialize(RO_INIT_SINGLETHREADED)? };
-    let _controller = create_dispatcher_queue_controller_for_current_thread()?;
+    let _controller =
+            DispatcherQueueController::create_dispatcher_queue_controller_for_current_thread()?;
 
     let event_loop = EventLoop::new();
     let window = WindowBuilder::new().build(&event_loop).unwrap();

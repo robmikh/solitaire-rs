@@ -8,6 +8,7 @@ edition = "2018"
 winit = "0.24.0"
 raw-window-handle = "0.3.3"
 rand = "0.8.3"
+compsvg = { version = "0.1.0", git = "https://github.com/robmikh/compsvg" }
 
 [dependencies.windows]
 version = "0.28.0"
@@ -42,4 +43,14 @@ features = [
     "Win32_System_WinRT_Direct3D11",
     "Win32_System_WinRT_Graphics_Direct2D",
     "Win32_UI_WindowsAndMessaging",
+]
+
+[dependencies.robmikh-common]
+git = "https://github.com/robmikh/robmikh-common-rs"
+version = "0.1.0"
+features = [
+    "composition-desktop",
+    "d2d",
+    "d3d",
+    "dispatcher-queue-desktop",
 ]
