@@ -12,12 +12,17 @@ use winit::{
     window::WindowBuilder,
 };
 
-use windows::{Foundation::Numerics::Vector2, System::DispatcherQueueController, UI::Composition::Compositor, Win32::System::WinRT::{RoInitialize, RO_INIT_SINGLETHREADED}};
+use windows::{
+    Foundation::Numerics::Vector2,
+    System::DispatcherQueueController,
+    Win32::System::WinRT::{RoInitialize, RO_INIT_SINGLETHREADED},
+    UI::Composition::Compositor,
+};
 
 fn main() -> Result<()> {
     unsafe { RoInitialize(RO_INIT_SINGLETHREADED)? };
     let _controller =
-            DispatcherQueueController::create_dispatcher_queue_controller_for_current_thread()?;
+        DispatcherQueueController::create_dispatcher_queue_controller_for_current_thread()?;
 
     let event_loop = EventLoop::new();
     let window = WindowBuilder::new().build(&event_loop).unwrap();

@@ -8,13 +8,13 @@ edition = "2018"
 winit = "0.24.0"
 raw-window-handle = "0.3.3"
 rand = "0.8.3"
-compsvg = { version = "0.1.0", git = "https://github.com/robmikh/compsvg" }
+compsvg = { git = "https://github.com/robmikh/compsvg", rev = "6c49a6bef748d00c0efdd0314b02c49bfe50dc21" }
 
 [dependencies.windows]
-version = "0.28.0"
+version = "0.37.0"
 features = [
     "alloc",
-    "build",
+    "implement",
     "Foundation",
     "Foundation_Collections",
     "Foundation_Metadata",
@@ -47,7 +47,7 @@ features = [
 
 [dependencies.robmikh-common]
 git = "https://github.com/robmikh/robmikh-common-rs"
-rev = "b2d0a14384f4b0032a4d3b3d2e747e18493c4c95"
+rev = "b5eb775457e1168be46831d7d67130419bb821e7"
 features = [
     "composition-desktop",
     "d2d",

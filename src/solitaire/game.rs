@@ -1,6 +1,6 @@
-use windows::UI::Composition::VisualCollection;
 use windows::core::{Interface, Result};
 use windows::Foundation::Numerics::Vector3;
+use windows::UI::Composition::VisualCollection;
 use windows::{
     Foundation::Numerics::Vector2,
     UI::Composition::{Compositor, ContainerVisual, Visual},
@@ -49,9 +49,9 @@ struct LayoutInformation {
 
 impl Default for LayoutInformation {
     fn default() -> Self {
-        Self { 
-            card_stack_vertical_offset: 47.88, 
-            waste_horizontal_offset: 65.0 
+        Self {
+            card_stack_vertical_offset: 47.88,
+            waste_horizontal_offset: 65.0,
         }
     }
 }
@@ -80,7 +80,7 @@ impl Game {
         let text_height = shape_cache.text_height();
         let layout_info = LayoutInformation {
             card_stack_vertical_offset: text_height,
-            .. Default::default()
+            ..Default::default()
         };
         let card_size = CompositionCard::CardSize;
 
@@ -104,7 +104,10 @@ impl Game {
 
         // Waste
         let waste_visual = compositor.CreateContainerVisual()?;
-        waste_visual.SetSize(Vector2::new((2.0 * layout_info.waste_horizontal_offset) + card_size.X, card_size.Y))?;
+        waste_visual.SetSize(Vector2::new(
+            (2.0 * layout_info.waste_horizontal_offset) + card_size.X,
+            card_size.Y,
+        ))?;
         waste_visual.SetOffset(Vector3::new(card_size.X + 25.0, 0.0, 0.0))?;
         waste_visual.SetComment("Waste Area Root")?;
         visuals.InsertAtTop(&waste_visual)?;

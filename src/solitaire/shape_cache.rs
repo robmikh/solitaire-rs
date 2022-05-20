@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use compsvg::{SvgCompositionShapes, convert_svg_document_to_composition_shapes};
+use compsvg::{convert_svg_document_to_composition_shapes, SvgCompositionShapes};
 use robmikh_common::universal::d2d::{create_d2d_device, create_d2d_factory};
 use robmikh_common::universal::d3d::create_d3d_device;
 use windows::core::{Interface, Result};
@@ -18,9 +18,7 @@ use windows::{
     },
 };
 
-use crate::util::{
-    streams::ReadOnlyCursorToStreamWrapper,
-};
+use crate::util::streams::create_stream_from_bytes;
 
 use super::{
     assets::get_asset_data,
@@ -70,7 +68,7 @@ impl ShapeCache {
         for card in cards {
             let asset_name = get_svg_file_name(&card);
             let data = get_asset_data(&asset_name).unwrap();
-            let stream: IStream = ReadOnlyCursorToStreamWrapper::new(data).into();
+            let stream: IStream = create_stream_from_bytes(data)?;
             let viewport = D2D_SIZE_F {
                 width: 1.0,
                 height: 1.0,

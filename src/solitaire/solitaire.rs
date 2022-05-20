@@ -64,6 +64,15 @@ impl Solitaire {
         content.SetScale(Vector3::new(scale, scale, 1.0))?;
         root_children.InsertAtTop(&content)?;
 
+        let debug_card = super::composition_card::CompositionCard::new(
+            super::card::Card::new(super::card::Face::King, super::card::Suit::Diamond),
+            &shape_cache,
+        )?;
+        let visual = debug_card.root()?;
+        visual.SetScale(Vector3::new(3.0, 3.0, 1.0))?;
+        root_children.InsertAtTop(visual)?;
+        std::mem::forget(debug_card);
+
         let size = content.Size()?;
         let game = Game::new(compositor, size, shape_cache)?;
         content.Children()?.InsertAtTop(game.root()?)?;
